@@ -1,7 +1,7 @@
 <?php
 
 function sendWebhook($msg) {
-    $webhookUrl = "https://discord.com/api/webhooks/1219410114898038894/rDvsFL6B27JHj_sakf91AeipFr8cqmoAGza6sygRodFwTkm1VYMwKQ0moLoOD5ujxTr2";
+    $webhookUrl = "webhook_discord_url";
     $message = array('content' => $msg);
     $jsonData = json_encode($message);
     $ch = curl_init($webhookUrl);
