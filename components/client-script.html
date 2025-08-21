@@ -1,0 +1,181 @@
+<script>
+    let $textarea;
+    function copyText(content) {
+        if (!$textarea) {
+            $textarea = $('<textarea>').text(content).hide().appendTo('body');
+        } else {
+            $textarea.text(content);
+        }
+        const textarea = $textarea.get(0);
+        if(document.hasFocus()){
+            textarea.select();
+            textarea.setSelectionRange(0, 99999);
+            navigator.clipboard.writeText(textarea.value);
+            textarea.remove();
+            alert("Copied " +  content + " to clipboard")
+        }
+    }
+
+    function copyServerIP(obj){
+        copyText($(obj).attr('_copy_data'))
+    }
+
+    function addSoon(){
+        alert("Function not available on this time");
+    }
+
+    function addLoading(){
+        $(".category").hide();
+        $('.sponsored-txt').hide();
+        $('.sponsored-banner').hide();
+        $(".footer").hide();
+        $("#boxes").html('<div class="anim-load" id="loader"><div class="loader"></div></div>')
+    }
+
+    function stopLoading(){
+        $("#loader").fadeOut(200);
+        var screenWidth = $(window).width();
+        if (screenWidth > 1090) {
+            $('#sponsored-txt').fadeIn(300);
+        }
+        else{
+            $('#sponsored-txt-mobile').fadeIn(300);
+        }
+        $(".category").fadeIn(350);
+        $('.sponsored-banner').fadeIn();
+        $(".footer").fadeIn(200);
+    }
+
+    function getServersData(orderBy="ip", callback=function(){}){
+        $.get("/mvlist/api/get/order/" + orderBy, function( data ) {
+            let servers = JSON.parse(data)
+            let result = [];
+            for (let pos = 0; pos < servers.length; pos++) {
+                result.push(servers[pos])
+            }
+            callback(result);
+        });
+    }
+    function fetchData(ip, callback=function(){}) {
+        $.getJSON("https://api.minetools.eu/ping/" + ip, function(api) {
+            if (api.error) {
+                console.error("[API] External Error with fetch server", ip, ":", api.error);
+                callback(null);
+                return;
+            }
+
+            const result = {
+                description_status: api.description,
+                icon: api.favicon,
+                online_players: api.players.online,
+                max_players: api.players.max,
+            };
+
+            callback(result);
+        });
+    }
+
+    function generateBox(name, ip, icon, desc, ver, players){
+        const $html = $('<div class="box flex" title="Click to open website ' + ip + '"></div>').click(function() {window.open("http://" + ip)});;
+        const $content = $('<div class="content flex"></div>');
+        const $about = $('<div class="about flex"></div>');
+        const $sLogo = $('<img>').attr('src', icon).attr('alt', 'server logo').addClass('s-logo');
+        const $txt = $('<div class="txt"></div>');
+        const $h1 = $('<h1>').text(name);
+        const $h3 = $('<h3>').text(desc);
+        const $copyMobile = $('<button onclick="copyServerIP(this)">').addClass('copy').attr('id', 'copy-mobile').attr('_copy_data', ip).append('<i class="fa-solid fa-copy"></i>').append('<span>Copy</span>');
+        const $other = $('<div class="other flex"></div>');
+        const $status = $('<div class="status flex"></div>');
+        const $playersDiv = $('<div class="players">').append('<i class="fa-solid fa-user"></i>').append('<span>' + players + '</span>');
+        // const $ratingDiv = $('<div class="rating">').append('<i class="fa-solid fa-star"></i>').append('<span>' + rating + '</span>');
+        const $versionDiv = $('<div class="version">').append('<i class="fa-solid fa-circle-info"></i>').append('<span>' + ver + '</span>');
+        const $signalDiv = $('<div class="signal">').append('<i class="fa-solid fa-signal"></i>');
+        const $copy = $('<button onclick="copyServerIP(this)">').addClass('copy').attr('id', 'copy').attr('_copy_data', ip).append('<i class="fa-solid fa-copy"></i>').append('<span>Copy</span>');
+
+        $txt.append($h1).append($h3);
+        $about.append($sLogo).append($txt).append($copyMobile);
+        $status.append($playersDiv).append($versionDiv).append($signalDiv);
+        $other.append($status).append($copy);
+        $content.append($about).append($other);
+        $html.append($content);
+
+        return $html;
+    }
+
+    function getList(orderType = "name") {
+        addLoading();
+        let serverData = [];
+        let waitTime = [];
+        getServersData(orderType, function (serverList) {
+            for (let pos = 0; pos < serverList.length; pos++) {
+                const $serverIP = serverList[pos].ip;
+                fetchData($serverIP, function (apiData) {
+                    if (apiData) {
+                        let result = { ...serverList[pos], ...apiData };
+                        serverData.push(result);
+                    } else {
+                        console.error('Error fetching data');
+                    }
+                });
+            }
+            console.log(serverList[0])
+            let timePing = countPingTime("https://api.minetools.eu/ping/" + serverList[0].ip);
+            let wTime = Number((timePing * serverList.length) / 1.7).toFixed();
+            console.log("Waiting Time:", wTime);
+            waitTime.push(wTime);
+
+            setTimeout(function () {
+                if (orderType === 'name') {
+                    serverData.sort((a, b) => a.name.localeCompare(b.name));
+                } else if (orderType === 'description') {
+                    serverData.sort((a, b) => a.description.localeCompare(b.description));
+                } else if (orderType === 'players') {
+                    serverData.sort((a, b) => b.online_players - a.online_players);
+                }
+                for (let pos = 0; pos < serverData.length; pos++) {
+                    // Fetch Data from JSON
+                    const $serverIP = serverData[pos].ip;
+                    const $serverName = serverData[pos].name;
+                    const $serverDesc = serverData[pos].description;
+                    const $serverVer = serverData[pos].version;
+                    const $serverIcon = serverData[pos].icon;
+                    const $serverOnlinePlayers = serverData[pos].online_players;
+                    const $serverMaxPlayers = serverData[pos].max_players;
+                    const $serverPlayers = $serverOnlinePlayers + " / " + $serverMaxPlayers;
+
+                    const $box = generateBox($serverName, $serverIP, $serverIcon, $serverDesc, $serverVer, $serverPlayers);
+                    $("#boxes").append($box);
+                }
+                stopLoading();
+            }, wTime);
+        });
+    }
+
+
+    function countPingTime(url) {
+        var startTimestamp = new Date().getTime();
+
+        var xhr = new XMLHttpRequest();
+        xhr.open('HEAD', url, false); // Synchronous request
+        try {
+            xhr.send();
+        } catch (error) {
+            console.error('Error while making the request:', error);
+            return null; // Return null or handle the error as appropriate
+        }
+
+        if (xhr.status >= 200 && xhr.status < 300) {
+            var responseTimeStamp = new Date().getTime() - startTimestamp;
+            var differenceInMilliseconds = Math.abs(responseTimeStamp);
+            return differenceInMilliseconds;
+        } else {
+            console.error('Request failed with status', xhr.status);
+            return null; // Return null or handle the error as appropriate
+        }
+    }
+
+
+    $(function () {
+        getList();
+    });
+</script>
